@@ -1,0 +1,14 @@
+[package]
+name = "baesql-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+baesql-core = { path = "../baesql-core" }
+baesql-sql = { path = "../baesql-sql" }
+
+[[bin]]
+name = "baesql"
+path = "src/main.rs"
