@@ -33,3 +33,23 @@ fn cli_execute_runs_sql() {
     assert!(stdout.contains("cli"));
     let _ = fs::remove_file(path);
 }
+
+#[test]
+fn cli_uses_default_database_from_env() {
+    let dir = temp_path("default-dir");
+    fs::create_dir_all(&dir).expect("create temp dir");
+    let output = Command::new(env!("CARGO_BIN_EXE_baesql"))
+        .env("BAESQL_DATA_DIR", &dir)
+        .arg("--execute")
+        .arg("CREATE TABLE t (id INTEGER PRIMARY KEY); INSERT INTO t VALUES (1);")
+        .output()
+        .expect("run cli");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(dir.join("main.bae").exists());
+    let _ = fs::remove_file(dir.join("main.bae"));
+    let _ = fs::remove_dir(dir);
+}

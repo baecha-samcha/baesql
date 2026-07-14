@@ -1,6 +1,7 @@
 use std::env;
 use std::fs;
 use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use baesql_core::{Column, Engine, QueryResult, Value};
@@ -17,6 +18,9 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), String> {
     let args = Args::parse(env::args().skip(1).collect())?;
+    if args.uses_default_database {
+        ensure_database_parent(&args.database)?;
+    }
     let mut engine = Engine::open(&args.database).map_err(|error| error.to_string())?;
     match args.mode {
         Mode::Repl => repl(&mut engine),
@@ -30,8 +34,9 @@ fn run() -> Result<(), String> {
 }
 
 struct Args {
-    database: String,
+    database: PathBuf,
     mode: Mode,
+    uses_default_database: bool,
 }
 
 enum Mode {
@@ -42,12 +47,9 @@ enum Mode {
 
 impl Args {
     fn parse(args: Vec<String>) -> Result<Self, String> {
-        if args.is_empty() {
-            return Err(usage());
-        }
-        let database = args[0].clone();
+        let mut database = None;
         let mut mode = Mode::Repl;
-        let mut index = 1usize;
+        let mut index = 0usize;
         while index < args.len() {
             match args[index].as_str() {
                 "--execute" => {
@@ -61,16 +63,122 @@ impl Args {
                     mode = Mode::File(path.clone());
                 }
                 "--help" | "-h" => return Err(usage()),
+                other if database.is_none() => database = Some(PathBuf::from(other)),
                 other => return Err(format!("unknown argument '{other}'\n{}", usage())),
             }
             index += 1;
         }
-        Ok(Self { database, mode })
+        let (database, uses_default_database) = match database {
+            Some(path) => (path, false),
+            None => (default_database_path(), true),
+        };
+        Ok(Self {
+            database,
+            mode,
+            uses_default_database,
+        })
     }
 }
 
 fn usage() -> String {
-    "usage: baesql <database.bae> [--execute SQL | --file script.sql]".to_string()
+    "usage: baesql [database.bae] [--execute SQL | --file script.sql]".to_string()
+}
+
+fn default_database_path() -> PathBuf {
+    if let Some(data_dir) = env::var_os("BAESQL_DATA_DIR") {
+        return PathBuf::from(data_dir).join(DEFAULT_DATABASE);
+    }
+    if let Some(config) = read_config(Path::new("/etc/baesql/config.toml")) {
+        let database = config
+            .default_database
+            .filter(|name| is_safe_database_file_name(name))
+            .unwrap_or_else(|| DEFAULT_DATABASE.to_string());
+        return config.data_dir.join(database);
+    }
+    user_default_data_dir().join(DEFAULT_DATABASE)
+}
+
+const DEFAULT_DATABASE: &str = "main.bae";
+
+struct Config {
+    data_dir: PathBuf,
+    default_database: Option<String>,
+}
+
+fn read_config(path: &Path) -> Option<Config> {
+    let contents = fs::read_to_string(path).ok()?;
+    let mut data_dir = None;
+    let mut default_database = None;
+    for line in contents.lines() {
+        let line = line.split('#').next().unwrap_or("").trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let Some(value) = parse_toml_string(value.trim()) else {
+            continue;
+        };
+        match key.trim() {
+            "data_dir" => data_dir = Some(PathBuf::from(value)),
+            "default_database" => default_database = Some(value),
+            _ => {}
+        }
+    }
+    data_dir.map(|data_dir| Config {
+        data_dir,
+        default_database,
+    })
+}
+
+fn parse_toml_string(value: &str) -> Option<String> {
+    let value = value.strip_prefix('"')?.strip_suffix('"')?;
+    let mut output = String::new();
+    let mut chars = value.chars();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            match chars.next()? {
+                '"' => output.push('"'),
+                '\\' => output.push('\\'),
+                'n' => output.push('\n'),
+                't' => output.push('\t'),
+                _ => return None,
+            }
+        } else {
+            output.push(ch);
+        }
+    }
+    Some(output)
+}
+
+fn is_safe_database_file_name(name: &str) -> bool {
+    let path = Path::new(name);
+    !name.is_empty()
+        && name.ends_with(".bae")
+        && !path.is_absolute()
+        && path.components().count() == 1
+}
+
+fn user_default_data_dir() -> PathBuf {
+    env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".local")
+        .join("share")
+        .join("baesql")
+}
+
+fn ensure_database_parent(database: &Path) -> Result<(), String> {
+    let parent = database
+        .parent()
+        .ok_or_else(|| format!("database path '{}' has no parent", database.display()))?;
+    fs::create_dir_all(parent).map_err(|error| {
+        format!(
+            "failed to create data directory '{}': {error}",
+            parent.display()
+        )
+    })
 }
 
 fn repl(engine: &mut Engine) -> Result<(), String> {

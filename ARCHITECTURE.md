@@ -40,6 +40,14 @@ This crate provides:
 
 The CLI does not start a network server.
 
+When no database path is passed, the CLI resolves the default database path as:
+
+1. `BAESQL_DATA_DIR/main.bae`
+2. `/etc/baesql/config.toml` `data_dir` plus `default_database`, falling back to `main.bae`
+3. `$HOME/.local/share/baesql/main.bae`
+
+Unreadable or missing `/etc/baesql/config.toml` files are ignored.
+
 ## Storage Model
 
 BaeSQL 0.1 stores the entire database in one `.bae` file using a custom binary format. Writes go to a temporary file in the same directory, are synced, and are then installed with atomic rename.

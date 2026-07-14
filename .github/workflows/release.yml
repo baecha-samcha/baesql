@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - run: cargo build --workspace --release
+      - name: Package artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist deb/DEBIAN deb/usr/bin deb/usr/share/doc/baesql/examples
+          cp target/release/baesql dist/baesql-linux-arm64
+          cp target/release/baesql deb/usr/bin/baesql
+          chmod 0755 deb/usr/bin/baesql
+          cp LICENSE deb/usr/share/doc/baesql/copyright
+          cp packaging/config.raspberry-pi.toml deb/usr/share/doc/baesql/examples/config.raspberry-pi.toml
+          cat > deb/DEBIAN/control <<EOF
+          Package: baesql
+          Version: ${version}
+          Section: database
+          Priority: optional
+          Architecture: arm64
+          Maintainer: BaeSQL contributors
+          Description: Experimental independent relational database management system
+           BaeSQL stores data in custom .bae files and does not wrap another database engine.
+          EOF
+          dpkg-deb --build deb dist/baesql-linux-arm64.deb
+          cd dist
+          sha256sum baesql-linux-arm64 baesql-linux-arm64.deb > SHA256SUMS
+          sha256sum baesql-linux-arm64.deb > baesql-linux-arm64.deb.sha256
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/baesql-linux-arm64
+            dist/baesql-linux-arm64.deb
+            dist/baesql-linux-arm64.deb.sha256
+            dist/SHA256SUMS

@@ -1,0 +1,13 @@
+Source: baesql
+Section: database
+Priority: optional
+Maintainer: BaeSQL contributors
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+
+Package: baesql
+Architecture: arm64
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Experimental independent relational database management system
+ BaeSQL is an experimental independent relational database management system.
+ It stores data in custom .bae files and does not wrap another database engine.

@@ -20,10 +20,19 @@ Interactive REPL:
 cargo run -p baesql-cli -- database.bae
 ```
 
+If no database path is provided, BaeSQL opens `main.bae` in a default data directory. The data directory is resolved in this order:
+
+1. `BAESQL_DATA_DIR`
+2. `data_dir` from `/etc/baesql/config.toml`
+3. `$HOME/.local/share/baesql`
+
+BaeSQL creates the selected data directory when using the default path.
+
 Run one SQL string:
 
 ```bash
 cargo run -p baesql-cli -- database.bae --execute "SELECT * FROM users;"
+cargo run -p baesql-cli -- --execute "SELECT * FROM users;"
 ```
 
 Run a SQL file:
@@ -80,6 +89,23 @@ CREATE TABLE users (
 INSERT INTO users VALUES (1, 'Bae', TRUE);
 SELECT * FROM users WHERE active = TRUE;
 ```
+
+## Raspberry Pi Example Config
+
+```toml
+data_dir = "/srv/storage/baesql"
+default_database = "main.bae"
+```
+
+The install script only creates and uses `/srv/storage/baesql` when `/srv/storage` is actually mounted. Otherwise it leaves existing `.bae` files alone and BaeSQL falls back to the user default path.
+
+## Install Script
+
+```bash
+./install.sh
+```
+
+By default the script downloads release assets from `BaeSQL/baesql`. Set `BAESQL_GITHUB_REPO=owner/repo` to install from a different GitHub repository.
 
 ## Not Supported
 
