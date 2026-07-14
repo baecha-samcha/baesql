@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${BAESQL_GITHUB_REPO:-BaeSQL/baesql}"
+REPO="${BAESQL_GITHUB_REPO:-baecha-samcha/baesql}"
 BASE_URL="https://github.com/${REPO}/releases/latest/download"
 DEB_NAME="baesql-linux-arm64.deb"
 SHA_NAME="${DEB_NAME}.sha256"
